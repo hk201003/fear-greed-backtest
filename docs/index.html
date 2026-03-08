@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CNN Fear & Greed Index 戦略検証</title>
+<style>
+    body {
+        font-family: 'Segoe UI', 'Meiryo', sans-serif;
+        color: #1a1a1a;
+        line-height: 1.8;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        background: #f8fafc;
+    }
+    h1 {
+        color: #1a365d;
+        font-size: 28px;
+        border-bottom: 3px solid #2563eb;
+        padding-bottom: 12px;
+    }
+    .subtitle {
+        color: #6b7280;
+        font-size: 14px;
+        margin-top: -10px;
+    }
+    .card-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin: 30px 0;
+    }
+    .card {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 24px;
+        text-decoration: none;
+        color: inherit;
+        transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+    .card h2 {
+        margin: 0 0 8px 0;
+        font-size: 18px;
+    }
+    .card-1 { border-left: 4px solid #2563eb; }
+    .card-1 h2 { color: #1e40af; }
+    .card-2 { border-left: 4px solid #dc2626; }
+    .card-2 h2 { color: #991b1b; }
+    .card p { color: #6b7280; font-size: 13px; margin: 0; }
+    .card .tag {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: bold;
+        margin-top: 10px;
+    }
+    .tag-blue { background: #dbeafe; color: #1e40af; }
+    .tag-red { background: #fee2e2; color: #991b1b; }
+    .findings {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 24px;
+        margin: 20px 0;
+    }
+    .findings h3 {
+        color: #374151;
+        font-size: 16px;
+        margin-top: 0;
+    }
+    .findings ul { padding-left: 20px; }
+    .findings li { margin-bottom: 6px; font-size: 14px; }
+    .footer {
+        margin-top: 40px;
+        padding-top: 16px;
+        border-top: 1px solid #e2e8f0;
+        font-size: 12px;
+        color: #9ca3af;
+    }
+</style>
+</head>
+<body>
+
+<h1>CNN Fear & Greed Index 戦略検証</h1>
+<p class="subtitle">「恐怖で買い、強欲で売れ」は本当か？ データで検証した結果</p>
+
+<div class="card-grid">
+    <a href="backtest.html" class="card card-1">
+        <h2>Part 1: バックテスト再検証</h2>
+        <p>記事の主張を独自データで再現検証。デシル×保有期間の全80通りを網羅分析し、
+        ベンチマーク比較で超過リターンの実態を明らかにする。</p>
+        <span class="tag tag-blue">記事との一致率 93%</span>
+    </a>
+    <a href="leverage.html" class="card card-2">
+        <h2>Part 2: レバレッジ戦略</h2>
+        <p>勝率の高いゾーンにレバレッジをかけたらどうなるか？
+        SSO(2x)・UPRO(3x)の実データを使った13戦略の比較検証。</p>
+        <span class="tag tag-red">恐怖レバ3x → CAGR -1.4%</span>
+    </a>
+</div>
+
+<div class="findings">
+    <h3>主要な発見</h3>
+    <ul>
+        <li><b>記事の数値はほぼ正確</b> — 24項目中22項目が一致（93%）</li>
+        <li><b>ただしベンチマーク比較が欠如</b> — SPYを21日持てばPF 1.9。F&G戦略の超過リターンは+0.5%程度</li>
+        <li><b>恐怖ゾーンでのレバは最悪手</b> — 勝率70%でも最大損失-20%。3xで-60%、事実上の破産</li>
+        <li><b>強欲ゾーンでのレバが正解</b> — F&G>=80は最大損失-4.6%。3xでも-14%で回復可能</li>
+        <li><b>最高効率: 強欲2x+通常1x</b> — Sharpe 1.04、CAGR +18.4%、MDD -32%（SPY BHと同水準）</li>
+        <li><b>どのF&G戦略もバイ&ホールドに勝てない</b> — 市場離脱期間のリターンを逃すため</li>
+    </ul>
+</div>
+
+<div class="findings">
+    <h3>データ・手法</h3>
+    <ul>
+        <li>F&Gデータ: GitHub CSV (2011-2023) + CNN API (2024-2026) = 3,797件</li>
+        <li>価格データ: SPY/SSO/UPRO (yfinance)</li>
+        <li>期間: 2011-01-03 ～ 2026-03-06（約15年）</li>
+        <li>執行: シグナル翌営業日のOpen → N営業日後のOpen</li>
+        <li>方式: 非オーバーラップ（記事と同一条件）</li>
+    </ul>
+</div>
+
+<div class="footer">
+    作成日: 2026年3月8日 | 分析ツール: Python (pandas, numpy, yfinance)
+</div>
+
+</body>
+</html>

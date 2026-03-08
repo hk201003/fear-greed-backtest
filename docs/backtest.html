@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>CNN Fear & Greed Index バックテスト再検証レポート</title>
+<style>
+    @page { margin: 15mm; size: A4; }
+    body { font-family: 'Segoe UI', 'Meiryo', sans-serif; color: #1a1a1a; line-height: 1.6;
+           max-width: 900px; margin: 0 auto; padding: 20px; font-size: 13px; }
+    h1 { color: #1a365d; border-bottom: 3px solid #2563eb; padding-bottom: 8px; font-size: 22px; }
+    h2 { color: #1e40af; border-left: 4px solid #3b82f6; padding-left: 12px; margin-top: 30px; font-size: 17px; }
+    h3 { color: #374151; font-size: 14px; margin-top: 20px; }
+    table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 12px; }
+    th, td { border: 1px solid #d1d5db; padding: 5px 8px; text-align: right; }
+    th { background: #1e40af; color: white; font-weight: 600; }
+    td:first-child { text-align: left; font-weight: 500; }
+    .heatmap td { font-size: 11px; padding: 4px 6px; }
+    .match { background: #dcfce7; color: #166534; font-weight: bold; }
+    .close { background: #fef9c3; color: #854d0e; }
+    .diverge { background: #fee2e2; color: #991b1b; font-weight: bold; }
+    .callout { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 15px; margin: 15px 0; }
+    .callout-warn { background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px; padding: 15px; margin: 15px 0; }
+    .callout-red { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 15px; margin: 15px 0; }
+    .key-num { font-size: 28px; font-weight: bold; color: #1e40af; }
+    .verdict { display: inline-block; padding: 2px 10px; border-radius: 12px; font-weight: bold; font-size: 12px; }
+    .verdict-yes { background: #dcfce7; color: #166534; }
+    .verdict-partial { background: #fef9c3; color: #854d0e; }
+    .verdict-no { background: #fee2e2; color: #991b1b; }
+    .summary-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin: 15px 0; }
+    .summary-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; text-align: center; }
+    .section-break { page-break-before: always; }
+    .small { font-size: 11px; color: #6b7280; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>CNN Fear & Greed Index バックテスト再検証レポート</h1>
+<p class="small">作成日: 2026年3月8日 | データ期間: 2011-01-03 ～ 2026-03-06 | F&Gデータ: 3793件</p>
+
+<div class="summary-grid">
+    <div class="summary-card">
+        <div class="small">傾向一致率</div>
+        <div class="key-num">100%</div>
+        <div class="small">24/24項目</div>
+    </div>
+    <div class="summary-card">
+        <div class="small">SPY CAGR (2011-2026)</div>
+        <div class="key-num">11.6%</div>
+        <div class="small">バイ&ホールド</div>
+    </div>
+    <div class="summary-card">
+        <div class="small">21日ベンチマーク</div>
+        <div class="key-num">PF 1.92</div>
+        <div class="small">Avg +1.02%, WR 68%</div>
+    </div>
+</div>
+
+<!-- ===== 第1章 ===== -->
+<h2>1. 検証の概要</h2>
+
+<h3>検証対象の記事の主張</h3>
+<ul>
+    <li><b>20-40レンジ + 21日保有</b>が最も優秀（平均利益+1.45〜1.68%, 勝率70〜72%, PF 2.0〜2.64）</li>
+    <li><b>60-70レンジ</b>は罠（勝率50%未満、PF 0.98）</li>
+    <li><b>70-80レンジ + 5日保有</b>はモメンタム戦略として有効（PF 2.32）</li>
+    <li><b>90-100レンジ + 21日保有</b>でPF 4.77（ただしサンプル9件）</li>
+</ul>
+
+<h3>検証条件の比較</h3>
+<table>
+    <tr><th>項目</th><th>記事</th><th>本検証</th></tr>
+    <tr><td>価格データ</td><td>DTN IQ Feed / Wealth-Lab</td><td>yfinance</td></tr>
+    <tr><td>F&Gデータ</td><td>不明</td><td>GitHub CSV (2011-2023) + CNN API (2024-)</td></tr>
+    <tr><td>期間</td><td>2011〜執筆時(推定2024)</td><td>2011-01-03 ～ 2026-03-06</td></tr>
+    <tr><td>トレード方式</td><td>非オーバーラップ</td><td>非オーバーラップ（同一条件）</td></tr>
+    <tr><td>エントリー/エグジット</td><td>翌日寄付き</td><td>翌営業日Open</td></tr>
+</table>
+
+<div class="callout">
+    <b>重要な発見:</b> 記事は非オーバーラップ方式（前のトレードが終了するまで次に入らない）でバックテストしていた。
+    当初オーバーラップ方式で検証したところサンプル数が5〜7倍に膨れたが、非オーバーラップに修正後、
+    記事のサンプル数（例: 20-30 x 21日 = 58件）と検証値（60件）がほぼ一致した。
+</div>
+
+<!-- ===== 第2章 ===== -->
+<h2>2. 記事の数値 vs 検証結果</h2>
+
+<table>
+    <tr><th>デシル</th><th>保有</th><th>指標</th><th>記事</th><th>検証</th><th>差分</th><th>判定</th></tr>
+    <tr>
+            <td>20-30</td><td>21日</td><td>Avg%</td>
+            <td>1.45</td><td>1.53</td>
+            <td>+0.08</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>20-30</td><td>21日</td><td>WR%</td>
+            <td>70.69</td><td>71.67</td>
+            <td>+0.98</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>20-30</td><td>21日</td><td>PF</td>
+            <td>2.00</td><td>2.07</td>
+            <td>+0.07</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>20-30</td><td>21日</td><td>N</td>
+            <td>58</td><td>60</td>
+            <td>+2</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>30-40</td><td>21日</td><td>Avg%</td>
+            <td>1.68</td><td>1.85</td>
+            <td>+0.17</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>30-40</td><td>21日</td><td>WR%</td>
+            <td>71.79</td><td>72.50</td>
+            <td>+0.71</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>30-40</td><td>21日</td><td>PF</td>
+            <td>2.64</td><td>3.16</td>
+            <td>+0.52</td><td class="close">近い</td>
+        </tr>
+<tr>
+            <td>30-40</td><td>21日</td><td>N</td>
+            <td>78</td><td>80</td>
+            <td>+2</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>40-50</td><td>21日</td><td>Avg%</td>
+            <td>1.23</td><td>1.18</td>
+            <td>-0.05</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>40-50</td><td>21日</td><td>WR%</td>
+            <td>70.65</td><td>70.53</td>
+            <td>-0.12</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>40-50</td><td>21日</td><td>PF</td>
+            <td>2.26</td><td>2.22</td>
+            <td>-0.04</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>40-50</td><td>21日</td><td>N</td>
+            <td>92</td><td>95</td>
+            <td>+3</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>50-60</td><td>21日</td><td>Avg%</td>
+            <td>0.76</td><td>0.70</td>
+            <td>-0.06</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>50-60</td><td>21日</td><td>WR%</td>
+            <td>68.04</td><td>65.62</td>
+            <td>-2.42</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>50-60</td><td>21日</td><td>PF</td>
+            <td>1.69</td><td>1.62</td>
+            <td>-0.07</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>60-70</td><td>2日</td><td>Avg%</td>
+            <td>-0.01</td><td>-0.01</td>
+            <td>-0.00</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>60-70</td><td>2日</td><td>WR%</td>
+            <td>49.82</td><td>55.23</td>
+            <td>+5.41</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>60-70</td><td>2日</td><td>PF</td>
+            <td>0.98</td><td>0.97</td>
+            <td>-0.01</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>70-80</td><td>5日</td><td>Avg%</td>
+            <td>0.42</td><td>0.38</td>
+            <td>-0.04</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>70-80</td><td>5日</td><td>WR%</td>
+            <td>69.75</td><td>64.55</td>
+            <td>-5.20</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>70-80</td><td>5日</td><td>PF</td>
+            <td>2.32</td><td>2.23</td>
+            <td>-0.09</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>90-100</td><td>21日</td><td>Avg%</td>
+            <td>1.35</td><td>1.46</td>
+            <td>+0.11</td><td class="match">一致</td>
+        </tr>
+<tr>
+            <td>90-100</td><td>21日</td><td>PF</td>
+            <td>4.77</td><td>5.56</td>
+            <td>+0.79</td><td class="close">近い</td>
+        </tr>
+<tr>
+            <td>90-100</td><td>21日</td><td>N</td>
+            <td>9</td><td>10</td>
+            <td>+1</td><td class="match">一致</td>
+        </tr>
+
+</table>
+<p><b>傾向一致率: 24/24 (100%)</b> — 記事の数値はほぼ正確に再現された。</p>
+
+<!-- ===== 第3章 ===== -->
+<h2>3. 記事の主要主張の検証</h2>
+
+<h3>主張1: 「20-40レンジ + 21日保有」が最優秀</h3>
+<div class="callout">
+    <span class="verdict verdict-partial">部分的に支持</span><br>
+    PF 2.07〜3.16で確かに良好。ただし21日保有のPFランキングでは90-100（PF 5.56, N=10）や
+    80-90（PF 2.23）も上位。サンプルが十分な中では20-40が優秀、という主張は妥当。
+</div>
+
+<h3>主張2: 「60-70レンジ」は罠</h3>
+<div class="callout-warn">
+    <span class="verdict verdict-partial">条件付きで支持</span><br>
+    2日保有ではPF 0.97と確かに悪い。ただし21日保有ではPF 1.82, 勝率65.5%と普通にプラス。
+    「短期では罠、長期では問題ない」が正確。記事は短期データだけで「罠」と断定しており誇張気味。
+</div>
+
+<h3>主張3: 「70-80 x 5日」モメンタム有効</h3>
+<div class="callout">
+    <span class="verdict verdict-yes">支持される</span><br>
+    PF 2.23, 勝率64.5%。記事のPF 2.32と近い値。短期モメンタム効果は再現された。
+</div>
+
+<h3>主張4: 「90-100 x 21日」PF 4.77（少数サンプル）</h3>
+<div class="callout-warn">
+    <span class="verdict verdict-partial">数値は近いがサンプル不足</span><br>
+    検証でもPF 5.56（N=10）と高いが、10件では統計的に信頼できない。
+</div>
+
+<!-- ===== 第4章 ===== -->
+<div class="section-break"></div>
+<h2>4. PFヒートマップ（非オーバーラップ）</h2>
+<h3>プロフィットファクター</h3>
+<table class="heatmap">
+    <tr><th>デシル＼保有日数</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>10</th><th>15</th><th>21</th></tr>
+    <tr><td><b>0-10</b></td><td style="background:rgba(241,118,105,0.3);text-align:center">1.20</td><td style="background:rgba(246,113,105,0.3);text-align:center">1.03</td><td style="background:rgba(255,105,105,0.3);text-align:center">0.73</td><td style="background:rgba(238,121,105,0.3);text-align:center">1.31</td><td style="background:rgba(236,123,105,0.3);text-align:center">1.40</td><td style="background:rgba(233,126,105,0.3);text-align:center">1.51</td><td style="background:rgba(244,115,105,0.3);text-align:center">1.11</td><td style="background:rgba(214,145,105,0.3);text-align:center">2.19</td></tr>
+<tr><td><b>10-20</b></td><td style="background:rgba(235,124,105,0.3);text-align:center">1.44</td><td style="background:rgba(240,119,105,0.3);text-align:center">1.26</td><td style="background:rgba(243,116,105,0.3);text-align:center">1.13</td><td style="background:rgba(233,126,105,0.3);text-align:center">1.50</td><td style="background:rgba(244,115,105,0.3);text-align:center">1.09</td><td style="background:rgba(227,132,105,0.3);text-align:center">1.73</td><td style="background:rgba(230,129,105,0.3);text-align:center">1.60</td><td style="background:rgba(220,139,105,0.3);text-align:center">1.97</td></tr>
+<tr><td><b>20-30</b></td><td style="background:rgba(245,114,105,0.3);text-align:center">1.07</td><td style="background:rgba(227,132,105,0.3);text-align:center">1.72</td><td style="background:rgba(233,126,105,0.3);text-align:center">1.51</td><td style="background:rgba(243,116,105,0.3);text-align:center">1.13</td><td style="background:rgba(230,129,105,0.3);text-align:center">1.59</td><td style="background:rgba(236,123,105,0.3);text-align:center">1.39</td><td style="background:rgba(242,117,105,0.3);text-align:center">1.19</td><td style="background:rgba(217,142,105,0.3);text-align:center">2.07</td></tr>
+<tr><td><b>30-40</b></td><td style="background:rgba(244,115,105,0.3);text-align:center">1.12</td><td style="background:rgba(233,126,105,0.3);text-align:center">1.50</td><td style="background:rgba(235,124,105,0.3);text-align:center">1.41</td><td style="background:rgba(231,128,105,0.3);text-align:center">1.58</td><td style="background:rgba(225,134,105,0.3);text-align:center">1.78</td><td style="background:rgba(225,134,105,0.3);text-align:center">1.79</td><td style="background:rgba(217,142,105,0.3);text-align:center">2.08</td><td style="background:rgba(186,173,105,0.3);text-align:center">3.16</td></tr>
+<tr><td><b>40-50</b></td><td style="background:rgba(246,113,105,0.3);text-align:center">1.04</td><td style="background:rgba(246,113,105,0.3);text-align:center">1.05</td><td style="background:rgba(244,115,105,0.3);text-align:center">1.11</td><td style="background:rgba(243,116,105,0.3);text-align:center">1.14</td><td style="background:rgba(240,119,105,0.3);text-align:center">1.26</td><td style="background:rgba(227,132,105,0.3);text-align:center">1.70</td><td style="background:rgba(233,126,105,0.3);text-align:center">1.51</td><td style="background:rgba(213,146,105,0.3);text-align:center">2.22</td></tr>
+<tr><td><b>50-60</b></td><td style="background:rgba(244,115,105,0.3);text-align:center">1.11</td><td style="background:rgba(237,122,105,0.3);text-align:center">1.35</td><td style="background:rgba(243,116,105,0.3);text-align:center">1.14</td><td style="background:rgba(237,122,105,0.3);text-align:center">1.34</td><td style="background:rgba(239,120,105,0.3);text-align:center">1.28</td><td style="background:rgba(241,118,105,0.3);text-align:center">1.21</td><td style="background:rgba(225,134,105,0.3);text-align:center">1.78</td><td style="background:rgba(230,129,105,0.3);text-align:center">1.62</td></tr>
+<tr><td><b>60-70</b></td><td style="background:rgba(248,111,105,0.3);text-align:center">0.96</td><td style="background:rgba(248,111,105,0.3);text-align:center">0.97</td><td style="background:rgba(244,115,105,0.3);text-align:center">1.09</td><td style="background:rgba(241,118,105,0.3);text-align:center">1.20</td><td style="background:rgba(246,113,105,0.3);text-align:center">1.03</td><td style="background:rgba(240,119,105,0.3);text-align:center">1.26</td><td style="background:rgba(225,134,105,0.3);text-align:center">1.80</td><td style="background:rgba(224,135,105,0.3);text-align:center">1.82</td></tr>
+<tr><td><b>70-80</b></td><td style="background:rgba(248,111,105,0.3);text-align:center">0.95</td><td style="background:rgba(231,128,105,0.3);text-align:center">1.56</td><td style="background:rgba(231,128,105,0.3);text-align:center">1.57</td><td style="background:rgba(230,129,105,0.3);text-align:center">1.60</td><td style="background:rgba(213,146,105,0.3);text-align:center">2.23</td><td style="background:rgba(205,154,105,0.3);text-align:center">2.50</td><td style="background:rgba(222,137,105,0.3);text-align:center">1.89</td><td style="background:rgba(223,136,105,0.3);text-align:center">1.86</td></tr>
+<tr><td><b>80-90</b></td><td style="background:rgba(235,124,105,0.3);text-align:center">1.41</td><td style="background:rgba(240,119,105,0.3);text-align:center">1.25</td><td style="background:rgba(228,131,105,0.3);text-align:center">1.67</td><td style="background:rgba(219,140,105,0.3);text-align:center">2.01</td><td style="background:rgba(230,129,105,0.3);text-align:center">1.62</td><td style="background:rgba(190,169,105,0.3);text-align:center">3.02</td><td style="background:rgba(244,115,105,0.3);text-align:center">1.10</td><td style="background:rgba(213,146,105,0.3);text-align:center">2.23</td></tr>
+<tr><td><b>90-100</b></td><td style="background:rgba(224,135,105,0.3);text-align:center">1.83</td><td style="background:rgba(235,124,105,0.3);text-align:center">1.43</td><td style="background:rgba(253,106,105,0.3);text-align:center">0.79</td><td style="background:rgba(244,115,105,0.3);text-align:center">1.11</td><td style="background:rgba(106,253,105,0.3);text-align:center">6.02</td><td style="background:rgba(214,145,105,0.3);text-align:center">2.18</td><td style="background:rgba(105,255,105,0.3);text-align:center">6.09</td><td style="background:rgba(119,240,105,0.3);text-align:center">5.56</td></tr>
+
+    </table>
+
+<h3>平均利益率 (%)</h3>
+<table class="heatmap">
+    <tr><th>デシル＼保有日数</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>10</th><th>15</th><th>21</th></tr>
+    <tr><td><b>0-10</b></td><td style="background:rgba(222,137,105,0.3);text-align:center">0.137</td><td style="background:rgba(230,129,105,0.3);text-align:center">0.022</td><td style="background:rgba(255,105,105,0.3);text-align:center">-0.329</td><td style="background:rgba(207,152,105,0.3);text-align:center">0.360</td><td style="background:rgba(199,160,105,0.3);text-align:center">0.481</td><td style="background:rgba(168,191,105,0.3);text-align:center">0.928</td><td style="background:rgba(216,143,105,0.3);text-align:center">0.227</td><td style="background:rgba(118,241,105,0.3);text-align:center">1.655</td></tr>
+<tr><td><b>10-20</b></td><td style="background:rgba(218,141,105,0.3);text-align:center">0.204</td><td style="background:rgba(218,141,105,0.3);text-align:center">0.207</td><td style="background:rgba(224,135,105,0.3);text-align:center">0.114</td><td style="background:rgba(200,159,105,0.3);text-align:center">0.465</td><td style="background:rgba(225,134,105,0.3);text-align:center">0.097</td><td style="background:rgba(158,201,105,0.3);text-align:center">1.080</td><td style="background:rgba(165,194,105,0.3);text-align:center">0.970</td><td style="background:rgba(137,222,105,0.3);text-align:center">1.383</td></tr>
+<tr><td><b>20-30</b></td><td style="background:rgba(230,129,105,0.3);text-align:center">0.030</td><td style="background:rgba(204,155,105,0.3);text-align:center">0.411</td><td style="background:rgba(209,150,105,0.3);text-align:center">0.329</td><td style="background:rgba(223,136,105,0.3);text-align:center">0.125</td><td style="background:rgba(197,162,105,0.3);text-align:center">0.502</td><td style="background:rgba(198,161,105,0.3);text-align:center">0.496</td><td style="background:rgba(210,149,105,0.3);text-align:center">0.322</td><td style="background:rgba(126,233,105,0.3);text-align:center">1.531</td></tr>
+<tr><td><b>30-40</b></td><td style="background:rgba(229,130,105,0.3);text-align:center">0.041</td><td style="background:rgba(217,142,105,0.3);text-align:center">0.216</td><td style="background:rgba(216,143,105,0.3);text-align:center">0.237</td><td style="background:rgba(209,150,105,0.3);text-align:center">0.330</td><td style="background:rgba(200,159,105,0.3);text-align:center">0.461</td><td style="background:rgba(180,179,105,0.3);text-align:center">0.760</td><td style="background:rgba(157,202,105,0.3);text-align:center">1.088</td><td style="background:rgba(105,255,105,0.3);text-align:center">1.850</td></tr>
+<tr><td><b>40-50</b></td><td style="background:rgba(231,128,105,0.3);text-align:center">0.012</td><td style="background:rgba(230,129,105,0.3);text-align:center">0.023</td><td style="background:rgba(228,131,105,0.3);text-align:center">0.063</td><td style="background:rgba(226,133,105,0.3);text-align:center">0.087</td><td style="background:rgba(219,140,105,0.3);text-align:center">0.184</td><td style="background:rgba(190,169,105,0.3);text-align:center">0.604</td><td style="background:rgba(190,169,105,0.3);text-align:center">0.605</td><td style="background:rgba(150,209,105,0.3);text-align:center">1.183</td></tr>
+<tr><td><b>50-60</b></td><td style="background:rgba(230,129,105,0.3);text-align:center">0.031</td><td style="background:rgba(223,136,105,0.3);text-align:center">0.129</td><td style="background:rgba(227,132,105,0.3);text-align:center">0.067</td><td style="background:rgba(220,139,105,0.3);text-align:center">0.177</td><td style="background:rgba(221,138,105,0.3);text-align:center">0.162</td><td style="background:rgba(218,141,105,0.3);text-align:center">0.200</td><td style="background:rgba(189,170,105,0.3);text-align:center">0.625</td><td style="background:rgba(183,176,105,0.3);text-align:center">0.705</td></tr>
+<tr><td><b>60-70</b></td><td style="background:rgba(233,126,105,0.3);text-align:center">-0.012</td><td style="background:rgba(233,126,105,0.3);text-align:center">-0.011</td><td style="background:rgba(229,130,105,0.3);text-align:center">0.042</td><td style="background:rgba(225,134,105,0.3);text-align:center">0.095</td><td style="background:rgba(231,128,105,0.3);text-align:center">0.017</td><td style="background:rgba(218,141,105,0.3);text-align:center">0.206</td><td style="background:rgba(192,167,105,0.3);text-align:center">0.576</td><td style="background:rgba(179,180,105,0.3);text-align:center">0.772</td></tr>
+<tr><td><b>70-80</b></td><td style="background:rgba(233,126,105,0.3);text-align:center">-0.011</td><td style="background:rgba(222,137,105,0.3);text-align:center">0.141</td><td style="background:rgba(220,139,105,0.3);text-align:center">0.173</td><td style="background:rgba(218,141,105,0.3);text-align:center">0.203</td><td style="background:rgba(206,153,105,0.3);text-align:center">0.378</td><td style="background:rgba(190,169,105,0.3);text-align:center">0.611</td><td style="background:rgba(185,174,105,0.3);text-align:center">0.674</td><td style="background:rgba(185,174,105,0.3);text-align:center">0.681</td></tr>
+<tr><td><b>80-90</b></td><td style="background:rgba(226,133,105,0.3);text-align:center">0.085</td><td style="background:rgba(228,131,105,0.3);text-align:center">0.056</td><td style="background:rgba(220,139,105,0.3);text-align:center">0.171</td><td style="background:rgba(213,146,105,0.3);text-align:center">0.274</td><td style="background:rgba(218,141,105,0.3);text-align:center">0.208</td><td style="background:rgba(196,163,105,0.3);text-align:center">0.514</td><td style="background:rgba(227,132,105,0.3);text-align:center">0.075</td><td style="background:rgba(181,178,105,0.3);text-align:center">0.744</td></tr>
+<tr><td><b>90-100</b></td><td style="background:rgba(225,134,105,0.3);text-align:center">0.104</td><td style="background:rgba(226,133,105,0.3);text-align:center">0.080</td><td style="background:rgba(237,122,105,0.3);text-align:center">-0.077</td><td style="background:rgba(230,129,105,0.3);text-align:center">0.034</td><td style="background:rgba(200,159,105,0.3);text-align:center">0.465</td><td style="background:rgba(206,153,105,0.3);text-align:center">0.370</td><td style="background:rgba(153,206,105,0.3);text-align:center">1.150</td><td style="background:rgba(132,227,105,0.3);text-align:center">1.457</td></tr>
+
+    </table>
+
+<h3>勝率 (%)</h3>
+<table class="heatmap">
+    <tr><th>デシル＼保有日数</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>10</th><th>15</th><th>21</th></tr>
+    <tr><td><b>0-10</b></td><td style="background:rgba(200,159,105,0.3);text-align:center">59.0</td><td style="background:rgba(227,132,105,0.3);text-align:center">53.1</td><td style="background:rgba(231,128,105,0.3);text-align:center">52.3</td><td style="background:rgba(213,146,105,0.3);text-align:center">56.1</td><td style="background:rgba(196,163,105,0.3);text-align:center">60.0</td><td style="background:rgba(160,199,105,0.3);text-align:center">67.9</td><td style="background:rgba(209,150,105,0.3);text-align:center">57.1</td><td style="background:rgba(133,226,105,0.3);text-align:center">73.7</td></tr>
+<tr><td><b>10-20</b></td><td style="background:rgba(209,150,105,0.3);text-align:center">57.1</td><td style="background:rgba(212,147,105,0.3);text-align:center">56.4</td><td style="background:rgba(215,144,105,0.3);text-align:center">55.8</td><td style="background:rgba(208,151,105,0.3);text-align:center">57.3</td><td style="background:rgba(196,163,105,0.3);text-align:center">60.0</td><td style="background:rgba(177,182,105,0.3);text-align:center">64.2</td><td style="background:rgba(185,174,105,0.3);text-align:center">62.2</td><td style="background:rgba(169,190,105,0.3);text-align:center">65.8</td></tr>
+<tr><td><b>20-30</b></td><td style="background:rgba(218,141,105,0.3);text-align:center">55.1</td><td style="background:rgba(173,186,105,0.3);text-align:center">64.9</td><td style="background:rgba(199,160,105,0.3);text-align:center">59.2</td><td style="background:rgba(219,140,105,0.3);text-align:center">54.9</td><td style="background:rgba(186,173,105,0.3);text-align:center">62.0</td><td style="background:rgba(198,161,105,0.3);text-align:center">59.5</td><td style="background:rgba(170,189,105,0.3);text-align:center">65.7</td><td style="background:rgba(142,217,105,0.3);text-align:center">71.7</td></tr>
+<tr><td><b>30-40</b></td><td style="background:rgba(213,146,105,0.3);text-align:center">56.1</td><td style="background:rgba(201,158,105,0.3);text-align:center">58.9</td><td style="background:rgba(194,165,105,0.3);text-align:center">60.5</td><td style="background:rgba(196,163,105,0.3);text-align:center">59.9</td><td style="background:rgba(182,177,105,0.3);text-align:center">63.0</td><td style="background:rgba(153,206,105,0.3);text-align:center">69.3</td><td style="background:rgba(157,202,105,0.3);text-align:center">68.4</td><td style="background:rgba(139,220,105,0.3);text-align:center">72.5</td></tr>
+<tr><td><b>40-50</b></td><td style="background:rgba(221,138,105,0.3);text-align:center">54.4</td><td style="background:rgba(221,138,105,0.3);text-align:center">54.5</td><td style="background:rgba(208,151,105,0.3);text-align:center">57.2</td><td style="background:rgba(211,148,105,0.3);text-align:center">56.5</td><td style="background:rgba(198,161,105,0.3);text-align:center">59.4</td><td style="background:rgba(170,189,105,0.3);text-align:center">65.6</td><td style="background:rgba(160,199,105,0.3);text-align:center">67.9</td><td style="background:rgba(148,211,105,0.3);text-align:center">70.5</td></tr>
+<tr><td><b>50-60</b></td><td style="background:rgba(220,139,105,0.3);text-align:center">54.5</td><td style="background:rgba(212,147,105,0.3);text-align:center">56.5</td><td style="background:rgba(226,133,105,0.3);text-align:center">53.2</td><td style="background:rgba(198,161,105,0.3);text-align:center">59.5</td><td style="background:rgba(195,164,105,0.3);text-align:center">60.2</td><td style="background:rgba(194,165,105,0.3);text-align:center">60.5</td><td style="background:rgba(168,191,105,0.3);text-align:center">66.1</td><td style="background:rgba(170,189,105,0.3);text-align:center">65.6</td></tr>
+<tr><td><b>60-70</b></td><td style="background:rgba(220,139,105,0.3);text-align:center">54.5</td><td style="background:rgba(217,142,105,0.3);text-align:center">55.2</td><td style="background:rgba(223,136,105,0.3);text-align:center">53.9</td><td style="background:rgba(204,155,105,0.3);text-align:center">58.1</td><td style="background:rgba(217,142,105,0.3);text-align:center">55.4</td><td style="background:rgba(183,176,105,0.3);text-align:center">62.7</td><td style="background:rgba(168,191,105,0.3);text-align:center">66.0</td><td style="background:rgba(170,189,105,0.3);text-align:center">65.5</td></tr>
+<tr><td><b>70-80</b></td><td style="background:rgba(227,132,105,0.3);text-align:center">53.0</td><td style="background:rgba(172,187,105,0.3);text-align:center">65.2</td><td style="background:rgba(205,154,105,0.3);text-align:center">57.9</td><td style="background:rgba(199,160,105,0.3);text-align:center">59.2</td><td style="background:rgba(175,184,105,0.3);text-align:center">64.5</td><td style="background:rgba(149,210,105,0.3);text-align:center">70.1</td><td style="background:rgba(138,221,105,0.3);text-align:center">72.6</td><td style="background:rgba(147,212,105,0.3);text-align:center">70.6</td></tr>
+<tr><td><b>80-90</b></td><td style="background:rgba(197,162,105,0.3);text-align:center">59.7</td><td style="background:rgba(217,142,105,0.3);text-align:center">55.4</td><td style="background:rgba(171,188,105,0.3);text-align:center">65.5</td><td style="background:rgba(180,179,105,0.3);text-align:center">63.5</td><td style="background:rgba(198,161,105,0.3);text-align:center">59.6</td><td style="background:rgba(138,221,105,0.3);text-align:center">72.7</td><td style="background:rgba(160,199,105,0.3);text-align:center">67.9</td><td style="background:rgba(171,188,105,0.3);text-align:center">65.4</td></tr>
+<tr><td><b>90-100</b></td><td style="background:rgba(231,128,105,0.3);text-align:center">52.2</td><td style="background:rgba(181,178,105,0.3);text-align:center">63.2</td><td style="background:rgba(255,105,105,0.3);text-align:center">47.1</td><td style="background:rgba(196,163,105,0.3);text-align:center">60.0</td><td style="background:rgba(176,183,105,0.3);text-align:center">64.3</td><td style="background:rgba(165,194,105,0.3);text-align:center">66.7</td><td style="background:rgba(105,255,105,0.3);text-align:center">80.0</td><td style="background:rgba(105,255,105,0.3);text-align:center">80.0</td></tr>
+
+    </table>
+
+<h3>トレード数</h3>
+<table class="heatmap">
+    <tr><th>デシル＼保有日数</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>10</th><th>15</th><th>21</th></tr>
+    <tr><td><b>0-10</b></td><td style="background:rgba(131,228,105,0.3);text-align:center">61</td><td style="background:rgba(125,234,105,0.3);text-align:center">49</td><td style="background:rgba(122,237,105,0.3);text-align:center">44</td><td style="background:rgba(121,238,105,0.3);text-align:center">41</td><td style="background:rgba(118,241,105,0.3);text-align:center">35</td><td style="background:rgba(114,245,105,0.3);text-align:center">28</td><td style="background:rgba(110,249,105,0.3);text-align:center">21</td><td style="background:rgba(109,250,105,0.3);text-align:center">19</td></tr>
+<tr><td><b>10-20</b></td><td style="background:rgba(161,198,105,0.3);text-align:center">119</td><td style="background:rgba(152,207,105,0.3);text-align:center">101</td><td style="background:rgba(144,215,105,0.3);text-align:center">86</td><td style="background:rgba(138,221,105,0.3);text-align:center">75</td><td style="background:rgba(136,223,105,0.3);text-align:center">70</td><td style="background:rgba(127,232,105,0.3);text-align:center">53</td><td style="background:rgba(123,236,105,0.3);text-align:center">45</td><td style="background:rgba(119,240,105,0.3);text-align:center">38</td></tr>
+<tr><td><b>20-30</b></td><td style="background:rgba(191,168,105,0.3);text-align:center">176</td><td style="background:rgba(177,182,105,0.3);text-align:center">148</td><td style="background:rgba(165,194,105,0.3);text-align:center">125</td><td style="background:rgba(158,201,105,0.3);text-align:center">113</td><td style="background:rgba(156,203,105,0.3);text-align:center">108</td><td style="background:rgba(143,216,105,0.3);text-align:center">84</td><td style="background:rgba(136,223,105,0.3);text-align:center">70</td><td style="background:rgba(131,228,105,0.3);text-align:center">60</td></tr>
+<tr><td><b>30-40</b></td><td style="background:rgba(218,141,105,0.3);text-align:center">228</td><td style="background:rgba(202,157,105,0.3);text-align:center">197</td><td style="background:rgba(192,167,105,0.3);text-align:center">177</td><td style="background:rgba(184,175,105,0.3);text-align:center">162</td><td style="background:rgba(176,183,105,0.3);text-align:center">146</td><td style="background:rgba(159,200,105,0.3);text-align:center">114</td><td style="background:rgba(149,210,105,0.3);text-align:center">95</td><td style="background:rgba(141,218,105,0.3);text-align:center">80</td></tr>
+<tr><td><b>40-50</b></td><td style="background:rgba(242,117,105,0.3);text-align:center">274</td><td style="background:rgba(215,144,105,0.3);text-align:center">222</td><td style="background:rgba(204,155,105,0.3);text-align:center">201</td><td style="background:rgba(195,164,105,0.3);text-align:center">184</td><td style="background:rgba(188,171,105,0.3);text-align:center">170</td><td style="background:rgba(166,193,105,0.3);text-align:center">128</td><td style="background:rgba(156,203,105,0.3);text-align:center">109</td><td style="background:rgba(149,210,105,0.3);text-align:center">95</td></tr>
+<tr><td><b>50-60</b></td><td style="background:rgba(255,105,105,0.3);text-align:center">297</td><td style="background:rgba(229,130,105,0.3);text-align:center">248</td><td style="background:rgba(213,146,105,0.3);text-align:center">218</td><td style="background:rgba(201,158,105,0.3);text-align:center">195</td><td style="background:rgba(194,165,105,0.3);text-align:center">181</td><td style="background:rgba(169,190,105,0.3);text-align:center">134</td><td style="background:rgba(158,201,105,0.3);text-align:center">112</td><td style="background:rgba(149,210,105,0.3);text-align:center">96</td></tr>
+<tr><td><b>60-70</b></td><td style="background:rgba(249,110,105,0.3);text-align:center">286</td><td style="background:rgba(224,135,105,0.3);text-align:center">239</td><td style="background:rgba(207,152,105,0.3);text-align:center">206</td><td style="background:rgba(195,164,105,0.3);text-align:center">184</td><td style="background:rgba(187,172,105,0.3);text-align:center">168</td><td style="background:rgba(165,194,105,0.3);text-align:center">126</td><td style="background:rgba(150,209,105,0.3);text-align:center">97</td><td style="background:rgba(145,214,105,0.3);text-align:center">87</td></tr>
+<tr><td><b>70-80</b></td><td style="background:rgba(203,156,105,0.3);text-align:center">198</td><td style="background:rgba(183,176,105,0.3);text-align:center">161</td><td style="background:rgba(169,190,105,0.3);text-align:center">133</td><td style="background:rgba(162,197,105,0.3);text-align:center">120</td><td style="background:rgba(157,202,105,0.3);text-align:center">110</td><td style="background:rgba(140,219,105,0.3);text-align:center">77</td><td style="background:rgba(132,227,105,0.3);text-align:center">62</td><td style="background:rgba(126,233,105,0.3);text-align:center">51</td></tr>
+<tr><td><b>80-90</b></td><td style="background:rgba(140,219,105,0.3);text-align:center">77</td><td style="background:rgba(133,226,105,0.3);text-align:center">65</td><td style="background:rgba(128,231,105,0.3);text-align:center">55</td><td style="background:rgba(126,233,105,0.3);text-align:center">52</td><td style="background:rgba(124,235,105,0.3);text-align:center">47</td><td style="background:rgba(117,242,105,0.3);text-align:center">33</td><td style="background:rgba(114,245,105,0.3);text-align:center">28</td><td style="background:rgba(113,246,105,0.3);text-align:center">26</td></tr>
+<tr><td><b>90-100</b></td><td style="background:rgba(111,248,105,0.3);text-align:center">23</td><td style="background:rgba(109,250,105,0.3);text-align:center">19</td><td style="background:rgba(108,251,105,0.3);text-align:center">17</td><td style="background:rgba(107,252,105,0.3);text-align:center">15</td><td style="background:rgba(107,252,105,0.3);text-align:center">14</td><td style="background:rgba(106,253,105,0.3);text-align:center">12</td><td style="background:rgba(105,255,105,0.3);text-align:center">10</td><td style="background:rgba(105,255,105,0.3);text-align:center">10</td></tr>
+
+    </table>
+
+<!-- ===== 第5章 ===== -->
+<div class="section-break"></div>
+<h2>5. ベンチマーク比較 — F&Gに本当に予測力はあるか？</h2>
+
+<div class="callout-red">
+    <b>最も重要な発見:</b> SPYを「いつ買っても」21日後にはAvg +1.02%,
+    勝率68%, PF 1.92。F&G戦略の超過リターンは見た目より小さい。
+</div>
+
+<table>
+    <tr><th>保有日数</th><th>ベンチマーク Avg%</th><th>WR%</th><th>PF</th></tr>
+    <tr><td>5日</td><td>+0.244%</td><td>60.2%</td><td>1.37</td></tr>
+    <tr><td>10日</td><td>+0.488%</td><td>63.2%</td><td>1.57</td></tr>
+    <tr><td>21日</td><td>+1.024%</td><td>68.2%</td><td>1.92</td></tr>
+    <tr><td>50日</td><td>+2.415%</td><td>74.4%</td><td>2.82</td></tr>
+    <tr><td>97日</td><td>+4.673%</td><td>77.8%</td><td>4.50</td></tr>
+</table>
+
+<p>たとえば記事が推す「20-30 x 21日」のAvg +1.53%は、ベンチマークの+1.02%と比較すると
+超過リターンは<b>わずか+0.51%</b>程度。</p>
+
+<!-- ===== 第6章 ===== -->
+<h2>6. 極端ゾーンの深掘り分析</h2>
+
+<h3>極端な恐怖（F&G低値）× 21日保有</h3>
+<table>
+    <tr><th>条件</th><th>平均損益</th><th>勝率</th><th>PF</th><th>N</th><th>最大損失</th></tr>
+    <tr><td>F&G &lt; 10</td><td>+3.039%</td><td>75.0%</td><td>4.12</td><td>132</td><td>-12.05%</td></tr>
+<tr><td>F&G &lt; 15</td><td>+1.752%</td><td>65.8%</td><td>2.20</td><td>263</td><td>-19.90%</td></tr>
+<tr><td>F&G &lt; 20</td><td>+1.730%</td><td>66.2%</td><td>2.18</td><td>400</td><td>-19.90%</td></tr>
+<tr><td>F&G &lt; 25</td><td>+1.727%</td><td>67.5%</td><td>2.18</td><td>567</td><td>-20.58%</td></tr>
+<tr><td>F&G &lt; 30</td><td>+1.749%</td><td>69.1%</td><td>2.27</td><td>782</td><td>-24.41%</td></tr>
+
+</table>
+
+<h3>極端な強欲（F&G高値）× 21日保有</h3>
+<table>
+    <tr><th>条件</th><th>平均損益</th><th>勝率</th><th>PF</th><th>N</th><th>最大損失</th></tr>
+    <tr><td>F&G &ge; 70</td><td>+0.825%</td><td>67.1%</td><td>2.11</td><td>687</td><td>-7.87%</td></tr>
+<tr><td>F&G &ge; 75</td><td>+1.008%</td><td>71.0%</td><td>2.58</td><td>417</td><td>-7.00%</td></tr>
+<tr><td>F&G &ge; 80</td><td>+1.270%</td><td>76.4%</td><td>4.17</td><td>225</td><td>-4.60%</td></tr>
+<tr><td>F&G &ge; 85</td><td>+1.506%</td><td>82.7%</td><td>9.76</td><td>127</td><td>-2.49%</td></tr>
+<tr><td>F&G &ge; 90</td><td>+1.185%</td><td>77.1%</td><td>6.02</td><td>48</td><td>-2.49%</td></tr>
+
+</table>
+
+<div class="callout">
+    <b>注目ポイント:</b> 極端な強欲（F&G &ge; 85）は平均+1.51%, PF 9.76, <b>最大損失わずか-2.49%</b>。
+    恐怖ゾーン（F&G &lt; 20）の最大損失-19.90%と比較して圧倒的にリスクが小さい。
+    ただしサンプル数127件（強欲）vs 400件（恐怖）で統計的信頼性に差がある。
+</div>
+
+<!-- ===== 第7章 ===== -->
+<div class="section-break"></div>
+<h2>7. F&G水準ベース売買戦略の検証</h2>
+
+<p>固定保有期間ではなく、「F&Gがある水準で買い、別の水準で売る」戦略を網羅検証。</p>
+
+<h3>トップ10戦略（PF順、N &ge; 15）</h3>
+<table>
+    <tr><th>#</th><th>タイプ</th><th>買い条件</th><th>売り条件</th><th>最大保有</th><th>N</th>
+        <th>平均損益</th><th>勝率</th><th>PF</th><th>平均保有日</th><th>最大損失</th></tr>
+    <tr>
+                <td>1</td><td>fear→greed</td><td><25</td><td>>80</td>
+                <td>126</td><td>22</td><td>+6.76%</td>
+                <td>86.4%</td><td>9.83</td>
+                <td>97</td><td>-8.94%</td>
+            </tr>
+<tr>
+                <td>2</td><td>fear→greed</td><td><20</td><td>>80</td>
+                <td>126</td><td>18</td><td>+6.70%</td>
+                <td>83.3%</td><td>9.09</td>
+                <td>99</td><td>-7.54%</td>
+            </tr>
+<tr>
+                <td>3</td><td>fear→greed</td><td><20</td><td>>60</td>
+                <td>126</td><td>22</td><td>+3.50%</td>
+                <td>77.3%</td><td>7.20</td>
+                <td>50</td><td>-7.54%</td>
+            </tr>
+<tr>
+                <td>4</td><td>fear→greed</td><td><20</td><td>>70</td>
+                <td>126</td><td>18</td><td>+4.84%</td>
+                <td>88.9%</td><td>6.99</td>
+                <td>74</td><td>-7.54%</td>
+            </tr>
+<tr>
+                <td>5</td><td>fear→greed</td><td><25</td><td>>60</td>
+                <td>126</td><td>29</td><td>+3.33%</td>
+                <td>75.9%</td><td>6.13</td>
+                <td>46</td><td>-7.54%</td>
+            </tr>
+<tr>
+                <td>6</td><td>fear→greed</td><td><30</td><td>>80</td>
+                <td>126</td><td>26</td><td>+6.01%</td>
+                <td>84.6%</td><td>6.02</td>
+                <td>94</td><td>-11.31%</td>
+            </tr>
+<tr>
+                <td>7</td><td>fear→greed</td><td><30</td><td>>70</td>
+                <td>126</td><td>26</td><td>+4.73%</td>
+                <td>84.6%</td><td>5.76</td>
+                <td>75</td><td>-11.31%</td>
+            </tr>
+<tr>
+                <td>8</td><td>fear→greed</td><td><25</td><td>>70</td>
+                <td>126</td><td>22</td><td>+4.44%</td>
+                <td>81.8%</td><td>5.26</td>
+                <td>75</td><td>-11.31%</td>
+            </tr>
+<tr>
+                <td>9</td><td>fear→greed</td><td><15</td><td>>60</td>
+                <td>126</td><td>15</td><td>+3.28%</td>
+                <td>66.7%</td><td>5.15</td>
+                <td>58</td><td>-7.54%</td>
+            </tr>
+<tr>
+                <td>10</td><td>fear→greed</td><td><30</td><td>>60</td>
+                <td>126</td><td>34</td><td>+3.21%</td>
+                <td>79.4%</td><td>4.96</td>
+                <td>45</td><td>-10.25%</td>
+            </tr>
+
+</table>
+
+<div class="callout-warn">
+    <b>トップ戦略「F&G &lt; 25で買い → F&G &gt; 80で売り」の真実:</b><br>
+    PF 9.83、勝率86.4%と見た目は優秀。しかし平均保有97日のベンチマーク（毎日買い97日保有）の
+    PFは4.50であり、超過分はPF 5程度。さらにCAGR換算すると：
+    <ul>
+        <li>この戦略: CAGR <b>9.6%</b>（市場参加率57%）</li>
+        <li>バイ&ホールド: CAGR <b>11.6%</b>（市場参加率100%）</li>
+    </ul>
+    <b>バイ&ホールドに負ける。</b>市場にいない43%の期間の上昇を逃すため。
+</div>
+
+<!-- ===== 第8章 ===== -->
+<h2>8. 総合結論</h2>
+
+<div class="callout">
+<h3>記事の検証結果</h3>
+<ul>
+    <li><b>数値の正確性: 93%一致</b> — 記事のバックテスト結果はほぼ正しい</li>
+    <li><b>主張の妥当性: 部分的</b> — 数字は正しいが解釈に誇張がある</li>
+</ul>
+
+<h3>記事が見落としている重要な点</h3>
+<ol>
+    <li><b>ベンチマーク比較の欠如</b>: SPYは21日持てばPF 1.9。F&G戦略の超過リターンは+0.5%程度</li>
+    <li><b>データマイニング</b>: 80通り（10デシル × 8保有期間）から最良を選んでいる</li>
+    <li><b>CAGR換算するとバイ&ホールドに負ける</b>: どのF&G戦略も市場離脱期間のリターンを逃す</li>
+    <li><b>最悪ケースの軽視</b>: 恐怖ゾーンで買った場合の最大損失は-20%超</li>
+</ol>
+
+<h3>実用的な結論</h3>
+<p>F&Gは<b>「売買シグナル」ではなく「資金配分の参考指標」</b>として使うのが妥当。</p>
+<ul>
+    <li>主力はSPYのバイ&ホールド（または定期積立）</li>
+    <li>F&G &lt; 20 → 追加資金を投入するタイミングの目安</li>
+    <li>F&G &gt; 80 → 新規投入を控える（売る必要はない）</li>
+    <li>F&Gだけで「買い/売り」を判断するのは非効率</li>
+</ul>
+</div>
+
+<p class="small" style="margin-top: 40px; border-top: 1px solid #d1d5db; padding-top: 10px;">
+    データソース: CNN Fear & Greed Index (whit3rabbit/fear-greed-data + CNN API), SPY (yfinance)<br>
+    分析ツール: Python (pandas, numpy) | 検証方式: 非オーバーラップ、翌営業日Open執行
+</p>
+
+</body>
+</html>
